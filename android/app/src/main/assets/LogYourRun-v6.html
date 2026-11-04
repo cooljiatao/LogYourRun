@@ -2452,7 +2452,7 @@
           { name: "老鹰", icon: "🦅", atk: 14, def: 6 },
           { name: "乌龟", icon: "🐢", atk: 1, def: 18 },
           { name: "雪怪", icon: "⛄", atk: 5, def: 10 },
-          { name: "末影", icon: "🐲", atk: 18, def: 12 },
+          { name: "青龙", icon: "🐲", atk: 18, def: 12 },
         ];
 
         // 宠物图片库：每页 20 个，按类别分组方便查找
@@ -2493,7 +2493,7 @@
             bonuses: [],
             redemptions: [],
             items: DEFAULT_ITEMS.map(function (i) {
-              return { name: i.name, icon: i.icon, cost: i.cost, atk: i.atk, def: i.def };
+              return { id: "i" + i.name, name: i.name, icon: i.icon, cost: i.cost, atk: i.atk, def: i.def };
             }),
             pets: DEFAULT_PETS.map(function (p) {
               return { id: "p" + p.name, name: p.name, icon: p.icon, atk: p.atk, def: p.def };
@@ -2557,6 +2557,15 @@
             });
             base.items = Array.isArray(data.items) && data.items.length ? data.items : base.items;
             base.pets = Array.isArray(data.pets) && data.pets.length ? data.pets : base.pets;
+            base.items.forEach(function (it, i) { it.id = it.id || "i" + (it.name || i); });
+            base.pets.forEach(function (p, i) { p.id = p.id || "p" + (p.name || i); });
+            base.redemptions.forEach(function (r) {
+              if (!r.itemId) {
+                var legacyItem = base.items.find(function (it) { return it.name === r.name; });
+                if (legacyItem) r.itemId = legacyItem.id;
+              }
+              delete r.name; delete r.icon;
+            });
             base.owned = Array.isArray(data.owned) ? data.owned : [];
             base.levels = Array.isArray(data.levels) ? data.levels : [];
             base.penalties = Array.isArray(data.penalties) ? data.penalties : [];
@@ -3157,8 +3166,7 @@
           state.redemptions.push({
             id: uid(),
             kidId: ui.kidId,
-            name: it.name,
-            icon: it.icon || "🎁",
+            itemId: it.id,
             cost: it.cost,
             status: "delivered",
             appliedAt: new Date().toISOString(),
@@ -3290,30 +3298,28 @@
           var order = [];
           state.redemptions.forEach(function (r) {
             if (r.kidId !== ui.kidId || r.status !== "delivered") return;
-            if (!owned[r.name]) {
-              owned[r.name] = { icon: r.icon || "🎁", n: 0 };
-              order.push(r.name);
+            var item = state.items.find(function (it) { return it.id === r.itemId; });
+            if (!item) return;
+            if (!owned[item.id]) {
+              owned[item.id] = { item: item, n: 0 };
+              order.push(item.id);
             }
-            owned[r.name].n++;
+            owned[item.id].n++;
           });
           if (!order.length) {
             emptyBox(host, "背包还空着——攒够绿宝石就能兑换第一件物品。");
           } else {
             var grid = document.createElement("div");
             grid.className = "bag-grid";
-            order.forEach(function (name) {
-              var info = levelInfo(ui.kidId, "item", name, owned[name].n);
-              var base = null;
-              state.items.forEach(function (it) {
-                if (it.name === name) {
-                  base = it;
-                }
-              });
-              var st = base ? itemStats(base) : statsFor(name, 10, null, null);
+            order.forEach(function (itemId) {
+              var item = owned[itemId].item;
+              var name = item.name;
+              var info = levelInfo(ui.kidId, "item", name, owned[itemId].n);
+              var st = itemStats(item);
               var card = node("tpl-bag-card");
-              card.querySelector(".bi-icon").textContent = owned[name].icon;
+              card.querySelector(".bi-icon").textContent = item.icon || "🎁";
               card.querySelector(".bi-name").textContent = name;
-              card.querySelector(".bi-count").textContent = "Lv." + info.lv + " ×" + owned[name].n;
+              card.querySelector(".bi-count").textContent = "Lv." + info.lv + " ×" + owned[itemId].n;
               var stat = document.createElement("div");
               stat.className = "bi-stat";
               stat.textContent = "⚔ " + stackAtk(st.atk, info) + "  🛡 " + stackAtk(st.def, info) + "  ×" + info.mult;
@@ -3337,9 +3343,10 @@
             return;
           }
           mine.forEach(function (r) {
+            var item = state.items.find(function (it) { return it.id === r.itemId; }) || { name: "已删除物品", icon: "🎁" };
             var line = node("tpl-run-line");
-            line.querySelector(".li-emoji1").textContent = r.icon || "🎁";
-            line.querySelector(".li-t").textContent = r.name;
+            line.querySelector(".li-emoji1").textContent = item.icon || "🎁";
+            line.querySelector(".li-t").textContent = item.name;
             line.querySelector(".li-s").textContent = "花费 " + r.cost + " 枚　" + String(r.appliedAt).slice(0, 10) + " 已到账";
             var acts = line.querySelector(".li-actions");
             clear(acts);
@@ -3494,6 +3501,7 @@
           state.pets.forEach(function (p) {
             var row = document.createElement("div");
             row.className = "pet-row";
+            row.dataset.id = p.id;
             var ic = document.createElement("button");
             ic.type = "button";
             ic.className = "pr-ico";
@@ -3566,7 +3574,7 @@
               bad = true;
               return;
             }
-            next.push({ id: "p" + nm, name: nm, icon: ic, atk: at, def: df });
+            next.push({ id: row.dataset.id || ("p" + uid()), name: nm, icon: ic, atk: at, def: df });
           });
           if (bad) {
             toast("每只宠物都要有名字，攻防不能为负");
@@ -3596,13 +3604,14 @@
             return;
           }
           list.forEach(function (r) {
+            var item = state.items.find(function (it) { return it.id === r.itemId; }) || { name: "已删除物品", icon: "🎁", cost: 0 };
             var line = node("tpl-deliver-line");
-            line.querySelector(".li-emoji1").textContent = r.icon || "🎁";
-            line.querySelector(".li-t").textContent = kidName(r.kidId) + " 兑换「" + r.name + "」";
+            line.querySelector(".li-emoji1").textContent = item.icon || "🎁";
+            line.querySelector(".li-t").textContent = kidName(r.kidId) + " 兑换「" + item.name + "」";
             line.querySelector(".li-s").textContent = "扣 " + r.cost + " 枚　" + String(r.appliedAt).slice(0, 10) + " 已自动发货";
             line.querySelector(".dv-ok").remove();
             line.querySelector(".dv-no").addEventListener("click", function () {
-              askConfirm("删除这笔兑换", "「" + r.name + "」会从" + kidName(r.kidId) + " 的背包移除，" + r.cost + " 枚绿宝石全额退还。", function () {
+              askConfirm("删除这笔兑换", "「" + item.name + "」会从" + kidName(r.kidId) + " 的背包移除，" + r.cost + " 枚绿宝石全额退还。", function () {
                 state.redemptions = state.redemptions.filter(function (x) {
                   return x.id !== r.id;
                 });
@@ -3624,6 +3633,7 @@
           }
           state.items.forEach(function (it) {
             var row = node("tpl-price-row");
+            row.dataset.id = it.id;
             row.querySelector(".pi-icon").value = it.icon || "🎁";
             row.querySelector(".pi-name").value = it.name;
             row.querySelector(".pi-cost").value = it.cost;
@@ -3693,12 +3703,10 @@
           var out = [];
           state.redemptions.forEach(function (r) {
             if (r.kidId !== kidId || r.status !== "delivered") return;
-            var src = null;
-            state.items.forEach(function (it) {
-              if (it.name === r.name) src = it;
-            });
-            var st = src ? itemStats(src) : statsFor(r.name, r.cost, null, null);
-            out.push({ name: r.name, icon: r.icon || "🎁", atk: st.atk, def: st.def });
+            var src = state.items.find(function (it) { return it.id === r.itemId; });
+            if (!src) return;
+            var st = itemStats(src);
+            out.push({ itemId: src.id, name: src.name, icon: src.icon || "🎁", atk: st.atk, def: st.def });
           });
           return out;
         }
@@ -3865,10 +3873,6 @@
           ui.pkBusy = false;
         }
 
-        function pkWinProb(a, b) {
-          return 1 / (1 + Math.pow(10, (b.power - a.power) / 140));
-        }
-
         function simFight(A, B) {
           var log = [];
           function snap(extra) {
@@ -3878,13 +3882,10 @@
             e.hp[B.kidId] = B.hp;
             log.push(e);
           }
-          var chance = pkWinProb(A, B);
-          var chosen = Math.random() < chance ? A : B;
           var first = Math.random() < 0.5 ? A : B;
           var second = first === A ? B : A;
-          var clutch = 0;
           var round = 0;
-          snap({ kind: "round", text: "⚔ 决斗开始！" + first.name + " 抢到先手，" + second.name + " 后手应战。（系统评估 " + A.name + " 胜率 " + Math.round(chance * 100) + "%）" });
+          snap({ kind: "round", text: "⚔ 决斗开始！" + first.name + " 抢到先手，" + second.name + " 后手应战。" });
 
           function strike(at, df, verb) {
             if (at.hp <= 0 || df.hp <= 0) {
@@ -3899,20 +3900,7 @@
             var pa = at.hp / at.hpMax;
             var pd = df.hp / df.hpMax;
             var morale = pa < pd ? Math.min(0.5, (pd - pa) * 1.1) : 0;
-            var ramp = at === chosen && round > 8 ? 1 + (round - 8) * 0.12 : 1;
-            var dmg = Math.max(1, Math.round((10 + 6 * Math.sqrt(at.atk)) * (0.6 + Math.random() * 0.95) * (1 - mit) * (crit ? 1.8 : 1) * (1 + morale) * ramp));
-            if (df === chosen && df.hp - dmg <= 0 && clutch < 2) {
-              clutch++;
-              df.hp = 1;
-              snap({
-                kind: "crit",
-                who: at.kidId,
-                tgt: df.kidId,
-                dmg: dmg,
-                text: at.name + " 的「" + at.weapon + "」打出 " + dmg + " 巨额伤害，" + df.name + " 死战保住 1 血！",
-              });
-              return;
-            }
+            var dmg = Math.max(1, Math.round((10 + 6 * Math.sqrt(at.atk)) * (0.6 + Math.random() * 0.95) * (1 - mit) * (crit ? 1.8 : 1) * (1 + morale)));
             df.hp = Math.max(0, df.hp - dmg);
             snap({
               kind: crit ? "crit" : "hit",
@@ -3923,7 +3911,7 @@
             });
           }
 
-          while (A.hp > 0 && B.hp > 0 && round < 16) {
+          while (A.hp > 0 && B.hp > 0) {
             round++;
             snap({ kind: "round", text: "第 " + round + " 回合" });
             var order = [first, second];
@@ -3951,22 +3939,11 @@
             });
           }
 
-          var w = chosen;
+          var w = A.hp > 0 ? A : B;
           var loser = w === A ? B : A;
-          var text;
-          var pw = Math.round((w.hp / w.hpMax) * 100);
-          var pl = Math.round((loser.hp / loser.hpMax) * 100);
-          if (loser.hp <= 0) {
-            text = "🏆 " + w.name + " 获胜！" + loser.name + " 血条清空。";
-          } else {
-            snap({ kind: "round", text: "⏱ 时间到，进入裁判环节：比较剩余血量与整场输出。" });
-            text =
-              w.hp / w.hpMax >= loser.hp / loser.hpMax
-                ? "🏆 " + round + " 回合打满，" + w.name + " 剩余血量 " + pw + "% 对 " + pl + "%，判定获胜！"
-                : "🏆 " + round + " 回合打满，虽然剩余血量 " + pw + "% 对 " + pl + "%，裁判按整场输出与装备压制判定 " + w.name + " 获胜！";
-          }
+          var text = "🏆 " + w.name + " 获胜！" + loser.name + " 血条清空。";
           snap({ kind: "end", winner: w.kidId, text: text });
-          return { log: log, rounds: round, winnerId: w.kidId, chance: chance };
+          return { log: log, rounds: round, winnerId: w.kidId };
         }
 
         function pkSideEl(kidId) {
@@ -4246,7 +4223,7 @@
             } else if (L.bag.length < need || R.bag.length < need) {
               msg += " 至少需要 " + need + " 件物品才能上场。";
             } else if (need === 0) {
-              msg += " 空手也能上场，装备越好胜率越高。";
+              msg += " 空手也能上场，装备会影响攻防和生命值。";
             }
           }
           $("pkNote").textContent = msg;
@@ -4255,10 +4232,8 @@
             [R, "pkRName", "pkRStats"],
           ].forEach(function (row) {
             $(row[1]).textContent = row[0].name;
-            var idx = row[0].kidId === ui.pkLeft ? 0 : 1;
-            var rate = idx === 0 ? pkWinProb(L, R) : 1 - pkWinProb(R, L);
             $(row[2]).textContent =
-              "伤害 " + row[0].atk + " · 防御 " + row[0].def + " · 物品 " + row[0].bag.length + " 件" + " · 宠物 " + (row[0].pet ? row[0].pet.name + " Lv." + row[0].pet.lv : "无") + " · 战力 " + row[0].power + " · 胜率 " + Math.round(rate * 100) + "%";
+              "伤害 " + row[0].atk + " · 防御 " + row[0].def + " · 物品 " + row[0].bag.length + " 件" + " · 宠物 " + (row[0].pet ? row[0].pet.name + " Lv." + row[0].pet.lv : "无") + " · 战力 " + row[0].power;
           });
           [
             [L, "pkLPet"],
@@ -4278,7 +4253,7 @@
             pkSetHp([L, R]);
           }
           $("pkRule").textContent =
-            "生命 = 240 ＋ 每件物品 12 ＋ 10 × √防御总和；单次伤害 =（10 ＋ 6 × √背包伤害总和）× 随机波动 0.6~1.55 ×（1 − 对方减伤），15% 概率暴击 ×1.8，也可能被闪避；落后一方最多拿 +50% 士气加成，第 9 回合起领先方逐步加成，带金苹果残血可回 45 血，最多 16 回合。胜负由带权重随机决定：系统先按双方战力算出胜率再抽签定胜者，所以装备差一截也不是必输，页面上的「系统评估胜率」就是真实概率。重复物品与宠物会按等级叠加（×数量×0.5~1 强化系数，等级越高系数越低），每人只能带 1 只宠物出战，出手时宠物会一起扑上去。";
+            "生命 = 240 ＋ 每件物品 12 ＋ 10 × √防御总和；单次伤害 =（10 ＋ 6 × √背包伤害总和）× 随机波动 0.6~1.55 ×（1 − 对方减伤），15% 概率暴击 ×1.8，也可能被闪避；落后一方最多拿 +50% 士气加成，带金苹果残血可回 45 血。任一方血条先归零即判负，决斗持续到出现胜负。重复物品与宠物会按等级叠加（×数量×0.5~1 强化系数，等级越高系数越低），每人只能带 1 只宠物出战，出手时宠物会一起扑上去。";
           var shortL = L.bag.length < need;
           var shortR = R.bag.length < need;
           var go = $("pkGo");
@@ -4543,7 +4518,7 @@
           });
 
           $("addItem").addEventListener("click", function () {
-            state.items.push({ name: "新奖励", icon: "🎁", cost: 50, atk: 8, def: 5 });
+            state.items.push({ id: "i" + uid(), name: "新奖励", icon: "🎁", cost: 50, atk: 8, def: 5 });
             save();
             renderPrices();
             toast("已新增一行，改好名字和价格后点保存");
@@ -4569,7 +4544,7 @@
               if (isNaN(def) || def < 0) {
                 def = statsFor(name, cost, null, null).def;
               }
-              next.push({ name: name, icon: icon, cost: cost, atk: atk, def: def });
+              next.push({ id: row.dataset.id || "i" + uid(), name: name, icon: icon, cost: cost, atk: atk, def: def });
             });
             if (bad) {
               toast("每行都要有名字，价格至少 1 枚");
@@ -4587,7 +4562,9 @@
 
           $("exportBtn").addEventListener("click", function () {
             try {
-              var json = JSON.stringify(state, null, 2);
+              var exportState = JSON.parse(JSON.stringify(state));
+              exportState.redemptions.forEach(function (r) { delete r.name; delete r.icon; });
+              var json = JSON.stringify(exportState, null, 2);
               var name = "跑步打卡备份-" + today() + ".json";
               if (nativeBridge("exportBackup")) {
                 window.LogYourRunAndroid.exportBackup(name, json);
@@ -4635,6 +4612,16 @@
               data.bonuses = Array.isArray(data.bonuses) ? data.bonuses : [];
               data.redemptions = Array.isArray(data.redemptions) ? data.redemptions : [];
               if (!Array.isArray(data.items) || !data.items.length) data.items = base.items;
+              data.items.forEach(function (it, i) { it.id = it.id || "i" + (it.name || i); });
+              data.pets = Array.isArray(data.pets) ? data.pets : base.pets;
+              data.pets.forEach(function (p, i) { p.id = p.id || "p" + (p.name || i); });
+              data.redemptions.forEach(function (r) {
+                if (!r.itemId) {
+                  var match = data.items.find(function (it) { return it.name === r.name; });
+                  if (match) r.itemId = match.id;
+                }
+                delete r.name; delete r.icon;
+              });
               state = data;
               ui.kidId = state.kids[0].id;
               save();
@@ -4757,6 +4744,16 @@
                   data.bonuses = Array.isArray(data.bonuses) ? data.bonuses : [];
                   data.redemptions = Array.isArray(data.redemptions) ? data.redemptions : [];
                   if (!Array.isArray(data.items) || !data.items.length) data.items = base.items;
+                  data.items.forEach(function (it, i) { it.id = it.id || "i" + (it.name || i); });
+                  data.pets = Array.isArray(data.pets) ? data.pets : base.pets;
+                  data.pets.forEach(function (p, i) { p.id = p.id || "p" + (p.name || i); });
+                  data.redemptions.forEach(function (r) {
+                    if (!r.itemId) {
+                      var match = data.items.find(function (it) { return it.name === r.name; });
+                      if (match) r.itemId = match.id;
+                    }
+                    delete r.name; delete r.icon;
+                  });
                   state = data;
                   ui.kidId = state.kids[0].id;
                   save();

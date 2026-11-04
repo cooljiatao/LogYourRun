@@ -2816,7 +2816,7 @@
           { id: "p老鹰", name: "老鹰", icon: "🦅", atk: 14, def: 6 },
           { id: "p乌龟", name: "乌龟", icon: "🐢", atk: 1, def: 18 },
           { id: "p雪怪", name: "雪怪", icon: "⛄", atk: 5, def: 10 },
-          { id: "p末影", name: "末影", icon: "🐲", atk: 18, def: 12 },
+          { id: "p青龙", name: "青龙", icon: "🐲", atk: 18, def: 12 },
         ];
 
         // 宠物图片库：每页 20 个，按类别分组方便查找
@@ -3657,6 +3657,7 @@
             toast("阳光还不够哦");
             return;
           }
+          var scrollY = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
           state.redemptions.push({
             id: uid(),
             kidId: ui.kidId,
@@ -3669,6 +3670,9 @@
           save();
           toast("招募成功，「" + it.name + "」已加入植物背包");
           renderAll();
+          window.requestAnimationFrame(function () {
+            window.scrollTo(0, scrollY);
+          });
         }
 
         function drawPet(kidId) {
@@ -4407,7 +4411,6 @@
           var chosen = Math.random() < chance ? A : B;
           var first = Math.random() < 0.5 ? A : B;
           var second = first === A ? B : A;
-          var clutch = 0;
           var round = 0;
           snap({ kind: "round", text: "⚔ 草坪保卫战开始！" + first.name + " 抢到先手，" + second.name + " 后手应战。（系统评估 " + A.name + " 胜率 " + Math.round(chance * 100) + "%）" });
 
@@ -4426,20 +4429,6 @@
             var morale = pa < pd ? Math.min(0.5, (pd - pa) * 1.1) : 0;
             var ramp = at === chosen && round > 8 ? 1 + (round - 8) * 0.12 : 1;
             var dmg = Math.max(1, Math.round((10 + 6 * Math.sqrt(at.atk)) * (0.6 + Math.random() * 0.95) * (1 - mit) * (crit ? 1.8 : 1) * (1 + morale) * ramp));
-            if (df === chosen && df.hp - dmg <= 0 && clutch < 2) {
-              clutch++;
-              df.hp = 1;
-              snap({
-                kind: "crit",
-                who: at.kidId,
-                tgt: df.kidId,
-                actorPlantId: at.pet && at.pet.id,
-                targetPlantId: df.pet && df.pet.id,
-                dmg: dmg,
-                text: at.name + " 的「" + at.weapon + "」打出 " + dmg + " 巨额伤害，" + df.name + " 死战保住 1 血！",
-              });
-              return;
-            }
             df.hp = Math.max(0, df.hp - dmg);
             snap({
               kind: crit ? "crit" : "hit",
@@ -4452,7 +4441,7 @@
             });
           }
 
-          while (A.hp > 0 && B.hp > 0 && round < 16) {
+          while (A.hp > 0 && B.hp > 0) {
             round++;
             snap({ kind: "round", text: "第 " + round + " 回合" });
             var order = [first, second];
@@ -4480,20 +4469,9 @@
             });
           }
 
-          var w = chosen;
+          var w = A.hp > 0 ? A : B;
           var loser = w === A ? B : A;
-          var text;
-          var pw = Math.round((w.hp / w.hpMax) * 100);
-          var pl = Math.round((loser.hp / loser.hpMax) * 100);
-          if (loser.hp <= 0) {
-            text = "🏆 " + w.name + " 获胜！" + loser.name + " 血条清空。";
-          } else {
-            snap({ kind: "round", text: "⏱ 时间到，进入裁判环节：比较剩余血量与整场输出。" });
-            text =
-              w.hp / w.hpMax >= loser.hp / loser.hpMax
-                ? "🏆 " + round + " 回合打满，" + w.name + " 剩余血量 " + pw + "% 对 " + pl + "%，判定获胜！"
-                : "🏆 " + round + " 回合打满，虽然剩余血量 " + pw + "% 对 " + pl + "%，裁判按整场输出与装备压制判定 " + w.name + " 获胜！";
-          }
+          var text = "🏆 " + w.name + " 获胜！" + loser.name + " 血条清空。";
           snap({ kind: "end", winner: w.kidId, text: text });
           return { log: log, rounds: round, winnerId: w.kidId, chance: chance };
         }

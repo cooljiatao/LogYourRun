@@ -21,11 +21,13 @@ android {
       dimension = "version"
       applicationId = "com.jiatao.logyourrun.pvz"
       buildConfigField("String", "API_URL", "\"file:///android_asset/PlantsVSZombies/LogYourRun-PVZ.html\"")
+      manifestPlaceholders["APP_NAME"] = "Run Plans"
     }
     create("mc"){
       dimension = "version"
       applicationId = "com.jiatao.logyourrun"
       buildConfigField("String", "API_URL", "\"file:///android_asset/LogYourRun-v6.html\"")
+      manifestPlaceholders["APP_NAME"] = "Run Craft"
     }
   }
 
