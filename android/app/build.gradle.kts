@@ -11,6 +11,24 @@ android {
     versionName = "1.0"
   }
 
+  buildFeatures {
+    buildConfig = true
+  }
+
+  flavorDimensions += "version"
+  productFlavors{
+    create("pvz"){
+      dimension = "version"
+      applicationId = "com.jiatao.logyourrun.pvz"
+      buildConfigField("String", "API_URL", "\"file:///android_asset/PlantsVSZombies/LogYourRun-PVZ.html\"")
+    }
+    create("mc"){
+      dimension = "version"
+      applicationId = "com.jiatao.logyourrun"
+      buildConfigField("String", "API_URL", "\"file:///android_asset/LogYourRun-v6.html\"")
+    }
+  }
+
   buildTypes {
     release {
       isMinifyEnabled = false

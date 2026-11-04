@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
       }
     )
 
-    webView.loadUrl("file:///android_asset/LogYourRun-v6.html")
+    webView.loadUrl(BuildConfig.API_URL)
 
     // 从 onCreate 这一刻开始计时：3 秒到且页面已加载完才收起闪屏
     splashJob =
